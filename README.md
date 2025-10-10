@@ -16,28 +16,6 @@
 
 ---
 
-## Key Findings
-
-### 📊 Network Evolution
-
-| Metric | Far | Close | Post |
-|--------|-----|-------|------|
-| **Parties** | 23 | 22 | 15 |
-| **Density** | 75% | 91% | **100%** |
-| **Components** | 4 | 2 | **1** |
-| **Agreement Rate** | 63.6% | **56.2%** ⬇️ | 62.2% |
-| **Strong Ties (z>1)** | 16.8% | 15.7% | **20.0%** ⬆️ |
-
-### 🔑 Main Findings
-
-1. **Pre-election cooperation dip**: Agreement drops to 56.2% as parties differentiate
-2. **Post-formation consolidation**: Network becomes fully connected (1 component, 100% density)
-3. **Selective cooperation**: 20% strong ties post-formation (highest proportion), despite 82% drop in raw volume
-
-**Interpretation:** Parties strategically reduce cooperation before elections (differentiation), then shift to focused partnerships post-formation (governance).
-
----
-
 ## Repository Structure
 
 ```
