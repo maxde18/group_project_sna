@@ -87,23 +87,6 @@ Rscript scripts/generate_network_statistics.R
 
 ---
 
-## Political Science Interpretation
-
-### Why Cooperation Dips Before Elections
-
-1. **Electoral differentiation**: Parties need to distinguish themselves
-2. **Base signaling**: Core voters want parties to "stand firm"
-3. **Coalition bargaining**: Avoid appearing "too cozy" to maintain leverage
-4. **Campaign mode**: Focus shifts from governance to position-taking
-
-### Why Structure Improves Post-Formation
-
-1. **Governance imperative**: New coalition must pass legislation
-2. **Selective cooperation**: Fewer votes but more focused partnerships
-3. **Complete integration**: All parties connected (100% density)
-
----
-
 ## Requirements
 
 ```r
@@ -119,5 +102,3 @@ install.packages(c("dplyr", "lubridate", "igraph", "ggplot2", "tidyr"))
 - 2024: 12,821 votes across 1,952 motions (Q3-Q4 only)
 
 ---
-
-**Analysis demonstrates strategic modulation of parliamentary cooperation across the electoral cycle in Dutch multiparty politics.** 🇳🇱📊
