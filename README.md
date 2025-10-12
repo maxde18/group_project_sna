@@ -126,31 +126,6 @@ This loads the Kieskompas ideology data and demonstrates how to:
 
 ---
 
-## Methodology Highlights
-
-### Network Construction
-- **Nodes:** Political parties (fracties)
-- **Edges:** Co-voting ties (min 5 shared votes)
-- **Weight:** Number of agreements between parties
-
-### Z-Score Normalization
-
-**Why?** Post-formation has 65% fewer votes → raw counts incomparable
-
-**Solution:** Standardize within each period:
-```
-z = (weight - mean) / sd
-```
-
-**Result:** Compare cooperation patterns independent of voting volume
-
-### Key Findings
-- Agreement rates: 63.6% (Far) → 56.2% (Close) → 62.2% (Post)
-- Network density: 0.75 → 0.91 → 1.00 (complete connectivity)
-- Strong ties (z>1): 16.8% (Far), 15.7% (Close), **20.0%** (Post)
-
----
-
 ## Requirements
 
 ```r
