@@ -26,6 +26,7 @@
 │   ├── voting_data_clean.csv      # 2024 data
 │   └── political_axes_data.csv    # Party ideology (Kieskompas 2023)
 ├── scripts/                       # R analysis scripts
+│   ├── fetch_voting_data.R        # Fetch data from Tweede Kamer API
 │   ├── three_period_network_analysis.R
 │   ├── three_period_network_analysis_normalized.R
 │   ├── analyze_components.R
@@ -50,6 +51,18 @@ quarto render SNA4DSprojectTemplate2025.qmd
 ```
 
 **Output:** `report/_output/SNA4DSprojectTemplate2025.pdf`
+
+### Fetch Data from API (Optional)
+
+**Note:** The data is already included in the repository. Only run this if you need to update with the latest votes from the Tweede Kamer.
+
+```bash
+Rscript scripts/fetch_voting_data.R
+```
+
+This fetches voting data via the Open Data Portal API and saves:
+- `data/voting_data_2023_preelection.csv` (2023 votes)
+- `data/voting_data_clean.csv` (2024 votes)
 
 ### Run Network Analysis
 
