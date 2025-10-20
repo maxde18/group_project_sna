@@ -27,7 +27,11 @@
 │   └── political_axes_data.csv    # Party ideology (Kieskompas 2023)
 ├── scripts/                       # R analysis scripts
 │   ├── fetch_voting_data.R        # Fetch data from Tweede Kamer API
-│   ├── three_period_network_analysis.R
+│   ├── two_period_network_analysis.R           # 1 year before vs after election
+│   ├── two_period_network_analysis_normalized.R # Z-score normalized version
+│   ├── pre_election_vs_post_formation_analysis.R # Before election vs after formation
+│   ├── pre_election_vs_post_formation_analysis_normalized.R # Z-score normalized version
+│   ├── three_period_network_analysis.R         # 3-period analysis (legacy)
 │   ├── three_period_network_analysis_normalized.R
 │   ├── analyze_components.R
 │   ├── generate_network_statistics.R
@@ -66,13 +70,30 @@ This fetches voting data via the Open Data Portal API and saves:
 
 ### Run Network Analysis
 
-**Raw weights:**
+**Two-Period Analysis (1 year before vs after election):**
 ```bash
-Rscript scripts/three_period_network_analysis.R
+# Raw weights
+Rscript scripts/two_period_network_analysis.R
+
+# Z-score normalized (recommended)
+Rscript scripts/two_period_network_analysis_normalized.R
 ```
 
-**Z-score normalized (recommended):**
+**Pre-Election vs Post-Formation Analysis:**
 ```bash
+# Raw weights
+Rscript scripts/pre_election_vs_post_formation_analysis.R
+
+# Z-score normalized (recommended)
+Rscript scripts/pre_election_vs_post_formation_analysis_normalized.R
+```
+
+**Three-Period Analysis (legacy):**
+```bash
+# Raw weights
+Rscript scripts/three_period_network_analysis.R
+
+# Z-score normalized
 Rscript scripts/three_period_network_analysis_normalized.R
 ```
 
