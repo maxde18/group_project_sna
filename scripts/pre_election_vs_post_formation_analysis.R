@@ -53,8 +53,14 @@ voting_data_2023$date <- ymd_hms(voting_data_2023$GewijzigdOp)
 voting_data_2024 <- read.csv("data/voting_data_clean.csv", stringsAsFactors = FALSE)
 voting_data_2024$date <- ymd_hms(voting_data_2024$GewijzigdOp)
 
+# Load Kieskompas ideology data
+ideology_data <- read.csv("data/political_axes_data.csv", stringsAsFactors = FALSE)
+names(ideology_data) <- c("left_right", "conservative_progressive", "party")
+ideology_data <- ideology_data[!is.na(ideology_data$party) & ideology_data$party != "", ]
+
 cat(sprintf("Total 2023 records: %d\n", nrow(voting_data_2023)))
-cat(sprintf("Total 2024 records: %d\n\n", nrow(voting_data_2024)))
+cat(sprintf("Total 2024 records: %d\n", nrow(voting_data_2024)))
+cat(sprintf("Ideology data loaded: %d parties\n\n", nrow(ideology_data)))
 
 # ============================================================================
 # CREATE TEMPORAL PERIODS
@@ -190,61 +196,100 @@ calculate_party_agreements <- function(data) {
   return(agreements_df)
 }
 
-create_party_network <- function(agreements, all_parties) {
+create_party_network <- function(agreements, all_parties, active_parties, ideology_data) {
   
-  if(nrow(agreements) == 0) {
-    # Create empty network
-    g <- make_empty_graph(n = length(all_parties), directed = FALSE)
-    V(g)$name <- all_parties
-    return(g)
+  # Create edges from agreements
+  if(nrow(agreements) > 0) {
+    edges <- data.frame(
+      from = agreements$ActorFractie_1,
+      to = agreements$ActorFractie_2,
+      weight = agreements$agreements,
+      agreement_rate = agreements$agreement_rate,
+      total_votes = agreements$total_votes,
+      stringsAsFactors = FALSE
+    )
+    
+    cat(sprintf("    Total party pairs with real data: %d\n", nrow(agreements)))
+    cat(sprintf("    Mean agreements: %.1f\n", mean(agreements$agreements)))
+  } else {
+    edges <- data.frame(
+      from = character(0),
+      to = character(0),
+      weight = numeric(0),
+      agreement_rate = numeric(0),
+      total_votes = numeric(0),
+      stringsAsFactors = FALSE
+    )
+    cat("    No party pairs with real data\n")
   }
   
-  # Include ALL edges (no threshold filtering)
-  edges <- data.frame(
-    from = agreements$ActorFractie_1,
-    to = agreements$ActorFractie_2,
-    weight = agreements$agreements,
-    agreement_rate = agreements$agreement_rate,
-    total_votes = agreements$total_votes
-  )
+  # Add minimal weight edges for inactive parties to ensure all nodes are connected
+  # This is required for QAP (same nodes) and ERGM (no isolates)
+  inactive_parties <- setdiff(all_parties, active_parties)
   
-  cat(sprintf("    Total party pairs: %d\n", nrow(agreements)))
-  cat(sprintf("    Mean agreements: %.1f\n", mean(agreements$agreements)))
-  cat(sprintf("    Including ALL %d edges in network\n", nrow(edges)))
+  if(length(inactive_parties) > 0) {
+    cat(sprintf("    Adding minimal edges for %d inactive parties...\n", length(inactive_parties)))
+    
+    # Connect each inactive party to the first active party with very low weight
+    if(length(active_parties) > 0) {
+      minimal_edges <- data.frame(
+        from = inactive_parties,
+        to = rep(active_parties[1], length(inactive_parties)),
+        weight = rep(0.001, length(inactive_parties)),  # Very low weight
+        agreement_rate = rep(0.001, length(inactive_parties)),
+        total_votes = rep(1, length(inactive_parties)),
+        stringsAsFactors = FALSE
+      )
+      
+      edges <- rbind(edges, minimal_edges)
+    }
+  }
   
-  # Create network
+  cat(sprintf("    Total edges (including minimal): %d\n", nrow(edges)))
+  
+  # Create network with all parties
   g <- graph_from_data_frame(edges, directed = FALSE, vertices = all_parties)
+  
+  # Add Kieskompas ideology attributes
+  party_names <- V(g)$name
+  V(g)$left_right <- sapply(party_names, function(p) {
+    idx <- which(ideology_data$party == p)
+    if(length(idx) > 0) ideology_data$left_right[idx[1]] else NA
+  })
+  
+  V(g)$conservative_progressive <- sapply(party_names, function(p) {
+    idx <- which(ideology_data$party == p)
+    if(length(idx) > 0) ideology_data$conservative_progressive[idx[1]] else NA
+  })
+  
+  # Mark which parties were actually active in this period
+  V(g)$active <- party_names %in% active_parties
   
   # Add party attributes for visualization
   V(g)$degree <- degree(g)
   V(g)$strength <- strength(g)
   V(g)$betweenness <- betweenness(g, weights = NA)
   
-  # Party categories for coloring based on Kieskompas ideology data
-  party_names <- V(g)$name
-  # Left: negative values (< -0.2)
-  # Center: close to 0 (-0.2 to 0.2)
-  # Right: positive values (> 0.2)
+  # Party categories for coloring based on Kieskompas left_right values
   V(g)$party_type <- ifelse(
-    party_names %in% c("BIJ1", "PvdD", "GroenLinks", "PvdA", "GroenLinks-PvdA", "DENK", "SP", "ChristenUnie", "50PLUS"), "Left",
-    ifelse(party_names %in% c("Volt", "D66", "NSC", "BBB"), "Center", "Right")
+    V(g)$left_right < -0.2, "Left",
+    ifelse(V(g)$left_right > 0.2, "Right", "Center")
   )
+  # Handle parties without ideology data
+  V(g)$party_type[is.na(V(g)$party_type)] <- "Center"
   
-  # Ideology for layout (left-right positions based on Kieskompas)
-  # Far left: BIJ1, PvdD, GroenLinks-PvdA, DENK, SP
-  # Center-left: ChristenUnie, 50PLUS, Volt, D66, NSC
-  # Center-right: BBB, PVV, CDA
-  # Right: VVD, SGP
-  # Far right: JA21, FVD, BVNL
-  V(g)$ideology <- ifelse(
-    party_names %in% c("BIJ1", "PvdD", "GroenLinks", "PvdA", "GroenLinks-PvdA", "DENK", "SP"), 1,
-    ifelse(party_names %in% c("ChristenUnie", "50PLUS", "Volt", "D66", "NSC"), 2,
-    ifelse(party_names %in% c("BBB", "PVV", "CDA"), 3,
-    ifelse(party_names %in% c("VVD", "SGP"), 4, 5)))
-  )
+  # Ideology for layout (use actual left_right coordinate)
+  # Scale from -1 to 1 → 1 to 5 for layout
+  V(g)$ideology <- ifelse(!is.na(V(g)$left_right), 
+                          (V(g)$left_right + 1) * 2 + 1,  # Maps -1→1, 0→3, 1→5
+                          3)  # Center for missing data
   
-  cat(sprintf("    Final network: %d nodes, %d edges, density = %.3f\n\n", 
+  cat(sprintf("    Final network: %d nodes, %d edges, density = %.3f\n", 
               vcount(g), ecount(g), edge_density(g)))
+  cat(sprintf("    Parties with ideology data: %d/%d\n", 
+              sum(!is.na(V(g)$left_right)), vcount(g)))
+  cat(sprintf("    Active parties: %d, Inactive (minimal edges): %d\n\n", 
+              sum(V(g)$active), sum(!V(g)$active)))
   
   return(g)
 }
@@ -269,19 +314,22 @@ parties_pre <- parties_pre[!is.na(parties_pre)]
 parties_post <- unique(data_post$ActorFractie)
 parties_post <- parties_post[!is.na(parties_post)]
 
-# For visualization consistency, use union of all parties
-all_parties_for_layout <- unique(c(parties_pre, parties_post))
+# IMPORTANT: For QAP analysis, both networks must have the SAME nodes
+# Use union of all parties across both periods
+all_parties <- sort(unique(c(parties_pre, parties_post)))
 
-cat(sprintf("Parties in PRE period: %d\n", length(parties_pre)))
-cat(sprintf("Parties in POST period: %d\n", length(parties_post)))
-cat(sprintf("Total unique parties across both periods: %d\n\n", length(all_parties_for_layout)))
+cat(sprintf("Active parties in PRE period: %d\n", length(parties_pre)))
+cat(sprintf("Active parties in POST period: %d\n", length(parties_post)))
+cat(sprintf("Total unique parties (union for QAP): %d\n", length(all_parties)))
+cat("NOTE: Both networks will have the same %d nodes.\n", length(all_parties))
+cat("      Inactive parties will have minimal edges (weight=0.001) for ERGM compatibility.\n\n")
 
-# Create networks using only parties active in each specific period
+# Create networks with SAME node set but different active parties
 cat("Creating PRE-ELECTION network:\n")
-g_pre <- create_party_network(agreements_pre, parties_pre)
+g_pre <- create_party_network(agreements_pre, all_parties, parties_pre, ideology_data)
 
 cat("Creating POST-FORMATION network:\n")
-g_post <- create_party_network(agreements_post, parties_post)
+g_post <- create_party_network(agreements_post, all_parties, parties_post, ideology_data)
 
 # ============================================================================
 # NETWORK COMPARISON STATISTICS
@@ -342,19 +390,14 @@ party_colors <- c("Left" = "#E74C3C",      # Red for left-wing parties
 pdf("results/visualizations/network_comparison_pre_vs_post_formation.pdf", width = 16, height = 8)
 par(mfrow = c(1, 2), mar = c(2, 2, 4, 2))
 
-# Common layout for comparison
+# Common layout for comparison (both networks have same nodes now)
 set.seed(42)
 # Use ideology-based layout for meaningful positioning
-layout_coords <- matrix(0, nrow = length(all_parties_for_layout), ncol = 2)
-for(i in 1:length(all_parties_for_layout)) {
-  party <- all_parties_for_layout[i]
-  if(party %in% V(g_pre)$name) {
-    ideology_pos <- V(g_pre)$ideology[V(g_pre)$name == party][1]
-  } else if(party %in% V(g_post)$name) {
-    ideology_pos <- V(g_post)$ideology[V(g_post)$name == party][1]
-  } else {
-    ideology_pos <- 3
-  }
+layout_coords <- matrix(0, nrow = length(all_parties), ncol = 2)
+for(i in 1:length(all_parties)) {
+  party <- all_parties[i]
+  # Get ideology position from the network (same for both since same nodes)
+  ideology_pos <- V(g_pre)$ideology[V(g_pre)$name == party][1]
   layout_coords[i, 1] <- ideology_pos + runif(1, -0.3, 0.3)
   layout_coords[i, 2] <- runif(1, -1, 1)
 }
@@ -363,26 +406,32 @@ for(i in 1:length(all_parties_for_layout)) {
 V(g_pre)$color <- party_colors[V(g_pre)$party_type]
 V(g_pre)$size <- pmax(8, sqrt(V(g_pre)$degree) * 4)
 
-# Highlight strongest edges: 30% above mean weight
+# Highlight strongest edges: 30% above mean weight (excluding minimal edges)
 if(ecount(g_pre) > 0) {
-  mean_weight_pre <- mean(E(g_pre)$weight)
-  weight_threshold_pre <- mean_weight_pre * 1.30
-  edges_to_show_pre <- which(E(g_pre)$weight >= weight_threshold_pre)
-  
-  # Set edge properties - stronger edges are more visible
-  E(g_pre)$width <- pmax(0.5, (E(g_pre)$weight / max(E(g_pre)$weight)) * 3)
-  E(g_pre)$color <- ifelse(E(g_pre)$weight >= weight_threshold_pre, 
-                           rgb(0.5, 0.5, 0.5, 0.85),  # Prominent for strong edges
-                           rgb(0.5, 0.5, 0.5, 0.08))  # Very faint for weaker edges
-  
-  cat(sprintf("  PRE: Highlighting %d/%d edges (30%% above mean of %.1f = threshold: %.1f)\n", 
-              length(edges_to_show_pre), ecount(g_pre), mean_weight_pre, weight_threshold_pre))
+  # Calculate mean only for real edges (weight > 0.01)
+  real_weights_pre <- E(g_pre)$weight[E(g_pre)$weight > 0.01]
+  if(length(real_weights_pre) > 0) {
+    mean_weight_pre <- mean(real_weights_pre)
+    weight_threshold_pre <- mean_weight_pre * 1.30
+    edges_to_show_pre <- which(E(g_pre)$weight >= weight_threshold_pre)
+    
+    # Set edge properties - stronger edges are more visible
+    E(g_pre)$width <- pmax(0.5, (E(g_pre)$weight / max(E(g_pre)$weight)) * 3)
+    E(g_pre)$color <- ifelse(E(g_pre)$weight >= weight_threshold_pre, 
+                             rgb(0.5, 0.5, 0.5, 0.85),  # Prominent for strong edges
+                             rgb(0.5, 0.5, 0.5, 0.08))  # Very faint for weaker edges
+    
+    cat(sprintf("  PRE: Highlighting %d/%d edges (30%% above mean of %.1f = threshold: %.1f)\n", 
+                length(edges_to_show_pre), ecount(g_pre), mean_weight_pre, weight_threshold_pre))
+  } else {
+    cat("  PRE: No real edges to highlight (only minimal edges)\n")
+  }
 } else {
   cat("  PRE: No edges to highlight\n")
 }
 
 plot(g_pre,
-     layout = layout_coords[match(V(g_pre)$name, all_parties_for_layout), ],
+     layout = layout_coords,
      vertex.label.cex = 0.7,
      vertex.label.color = "black",
      vertex.label.family = "sans",
@@ -393,26 +442,32 @@ plot(g_pre,
 V(g_post)$color <- party_colors[V(g_post)$party_type]
 V(g_post)$size <- pmax(8, sqrt(V(g_post)$degree) * 4)
 
-# Highlight strongest edges: 30% above mean weight
+# Highlight strongest edges: 30% above mean weight (excluding minimal edges)
 if(ecount(g_post) > 0) {
-  mean_weight_post <- mean(E(g_post)$weight)
-  weight_threshold_post <- mean_weight_post * 1.30
-  edges_to_show_post <- which(E(g_post)$weight >= weight_threshold_post)
-  
-  # Set edge properties - stronger edges are more visible
-  E(g_post)$width <- pmax(0.5, (E(g_post)$weight / max(E(g_post)$weight)) * 3)
-  E(g_post)$color <- ifelse(E(g_post)$weight >= weight_threshold_post, 
-                            rgb(0.5, 0.5, 0.5, 0.85),  # Prominent for strong edges
-                            rgb(0.5, 0.5, 0.5, 0.08))  # Very faint for weaker edges
-  
-  cat(sprintf("  POST: Highlighting %d/%d edges (30%% above mean of %.1f = threshold: %.1f)\n", 
-              length(edges_to_show_post), ecount(g_post), mean_weight_post, weight_threshold_post))
+  # Calculate mean only for real edges (weight > 0.01)
+  real_weights_post <- E(g_post)$weight[E(g_post)$weight > 0.01]
+  if(length(real_weights_post) > 0) {
+    mean_weight_post <- mean(real_weights_post)
+    weight_threshold_post <- mean_weight_post * 1.30
+    edges_to_show_post <- which(E(g_post)$weight >= weight_threshold_post)
+    
+    # Set edge properties - stronger edges are more visible
+    E(g_post)$width <- pmax(0.5, (E(g_post)$weight / max(E(g_post)$weight)) * 3)
+    E(g_post)$color <- ifelse(E(g_post)$weight >= weight_threshold_post, 
+                              rgb(0.5, 0.5, 0.5, 0.85),  # Prominent for strong edges
+                              rgb(0.5, 0.5, 0.5, 0.08))  # Very faint for weaker edges
+    
+    cat(sprintf("  POST: Highlighting %d/%d edges (30%% above mean of %.1f = threshold: %.1f)\n", 
+                length(edges_to_show_post), ecount(g_post), mean_weight_post, weight_threshold_post))
+  } else {
+    cat("  POST: No real edges to highlight (only minimal edges)\n")
+  }
 } else {
   cat("  POST: No edges to highlight\n")
 }
 
 plot(g_post,
-     layout = layout_coords[match(V(g_post)$name, all_parties_for_layout), ],
+     layout = layout_coords,
      vertex.label.cex = 0.7,
      vertex.label.color = "black",
      vertex.label.family = "sans",
@@ -438,7 +493,7 @@ hist(degree(g_post), breaks = 20, col = "#3498DB", border = "white",
 if(ecount(g_pre) > 0) {
   communities_pre <- cluster_louvain(g_pre)
   plot(communities_pre, g_pre, 
-       layout = layout_coords[match(V(g_pre)$name, all_parties_for_layout), ],
+       layout = layout_coords,
        vertex.label.cex = 0.6, main = "Communities - Pre-Election")
 } else {
   plot.new()
@@ -448,7 +503,7 @@ if(ecount(g_pre) > 0) {
 if(ecount(g_post) > 0) {
   communities_post <- cluster_louvain(g_post)
   plot(communities_post, g_post,
-       layout = layout_coords[match(V(g_post)$name, all_parties_for_layout), ],
+       layout = layout_coords,
        vertex.label.cex = 0.6, main = "Communities - Post-Formation")
 } else {
   plot.new()
@@ -533,6 +588,49 @@ write.csv(igraph::as_data_frame(g_post, "edges"),
 # Export comparison statistics
 write.csv(comparison_df, "results/statistics/pre_vs_post_formation_comparison.csv", row.names = FALSE)
 
+# Export node attributes (for QAP analysis)
+node_attrs_pre <- data.frame(
+  party = V(g_pre)$name,
+  left_right = V(g_pre)$left_right,
+  conservative_progressive = V(g_pre)$conservative_progressive,
+  active = V(g_pre)$active,
+  degree = V(g_pre)$degree,
+  strength = V(g_pre)$strength,
+  party_type = V(g_pre)$party_type,
+  stringsAsFactors = FALSE
+)
+write.csv(node_attrs_pre, "results/statistics/node_attributes_pre_election.csv", row.names = FALSE)
+
+node_attrs_post <- data.frame(
+  party = V(g_post)$name,
+  left_right = V(g_post)$left_right,
+  conservative_progressive = V(g_post)$conservative_progressive,
+  active = V(g_post)$active,
+  degree = V(g_post)$degree,
+  strength = V(g_post)$strength,
+  party_type = V(g_post)$party_type,
+  stringsAsFactors = FALSE
+)
+write.csv(node_attrs_post, "results/statistics/node_attributes_post_formation.csv", row.names = FALSE)
+
+cat("\n===============================================================================\n")
+cat("QAP/ERGM NETWORK VERIFICATION\n")
+cat("===============================================================================\n")
+cat(sprintf("Both networks have SAME %d nodes: %s\n", 
+            vcount(g_pre), 
+            ifelse(identical(sort(V(g_pre)$name), sort(V(g_post)$name)), "✓ YES", "✗ NO")))
+cat(sprintf("PRE network - Active parties: %d, Inactive: %d\n", 
+            sum(V(g_pre)$active), sum(!V(g_pre)$active)))
+cat(sprintf("POST network - Active parties: %d, Inactive: %d\n", 
+            sum(V(g_post)$active), sum(!V(g_post)$active)))
+cat(sprintf("Parties with Kieskompas ideology data: %d/%d\n", 
+            sum(!is.na(V(g_pre)$left_right)), vcount(g_pre)))
+cat("\nNode attributes available for QAP:\n")
+cat("  - left_right (Kieskompas coordinate)\n")
+cat("  - conservative_progressive (Kieskompas coordinate)\n")
+cat("  - active (boolean: was party active in this period?)\n")
+cat("  - degree, strength, party_type\n")
+
 cat("\n===============================================================================\n")
 cat("ANALYSIS COMPLETE!\n")
 cat("===============================================================================\n")
@@ -543,4 +641,6 @@ cat("  3. network_changes_pre_vs_post_formation.pdf - Change metrics visualizati
 cat("  4. edges_pre_election.csv - Edge list for pre-election period\n")
 cat("  5. edges_post_formation.csv - Edge list for post-formation period\n")
 cat("  6. pre_vs_post_formation_comparison.csv - Statistical comparison\n")
+cat("  7. node_attributes_pre_election.csv - Node attributes (for QAP)\n")
+cat("  8. node_attributes_post_formation.csv - Node attributes (for QAP)\n")
 cat("===============================================================================\n")

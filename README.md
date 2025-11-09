@@ -2,7 +2,7 @@
 
 ## Overview
 
-This repository contains a comprehensive social network analysis of co-voting patterns between political parties in the Dutch House of Representatives during the 2023-2024 electoral cycle. The analysis compares cooperation networks across different temporal periods to understand how party behavior changes around elections and government formation.
+This repository contains a comprehensive social network analysis of co-voting patterns between political parties in the Dutch House of Representatives during the 2023-2024 electoral cycle. The **primary analysis** compares party cooperation networks from **1 year before the 2023 election** vs. **1 year after the 2024 cabinet formation**, examining how party voting behavior changes across this critical transition period. Supplementary analyses explore shorter time windows (3-month and 1-month) for robustness checks.
 
 ---
 
@@ -24,14 +24,16 @@ This repository contains a comprehensive social network analysis of co-voting pa
 ├── scripts/                       # R analysis scripts
 │   ├── fetch_voting_data.R        # Fetch data from Tweede Kamer API
 │   │
-│   ├── one_month_pre_election_vs_post_formation.R # 1 month comparison (raw)
-│   ├── one_month_pre_election_vs_post_formation_normalized.R # (z-score)
+│   ├── pre_election_vs_post_formation_analysis.R ⭐ # PRIMARY: 1 year comparison (raw)
+│   ├── pre_election_vs_post_formation_analysis_normalized.R ⭐ # (z-score)
+│   │
+│   ├── ideology_correlation_analysis.R # Test correlation between ideology dimensions
 │   │
 │   ├── three_month_pre_election_vs_post_formation.R # 3 month comparison (raw)
 │   ├── three_month_pre_election_vs_post_formation_normalized.R # (z-score)
 │   │
-│   ├── pre_election_vs_post_formation_analysis.R # 1 year comparison (raw)
-│   ├── pre_election_vs_post_formation_analysis_normalized.R # (z-score)
+│   ├── one_month_pre_election_vs_post_formation.R # 1 month comparison (raw)
+│   ├── one_month_pre_election_vs_post_formation_normalized.R # (z-score)
 │   │
 │   ├── analyze_components.R       # Component analysis
 │   ├── generate_network_statistics.R # Comprehensive statistics
@@ -49,11 +51,11 @@ This repository contains a comprehensive social network analysis of co-voting pa
 
 ### Temporal Comparisons
 
-| Analysis | Time Periods | Use Case |
-|----------|-------------|----------|
-| **1-Month Snapshot** | 1 month before election vs 1 month after formation | Short-term transition effects |
-| **3-Month Comparison** | 3 months before election vs 3 months after formation | Medium-term patterns (recommended) |
-| **1-Year Comparison** | 1 year before election vs 1 year after formation | Long-term structural changes |
+| Analysis | Time Periods | Use Case | Status |
+|----------|-------------|----------|---------|
+| **1-Year Comparison** ⭐ | 1 year before election vs 1 year after formation | Long-term structural changes | **PRIMARY ANALYSIS** |
+| **3-Month Comparison** | 3 months before election vs 3 months after formation | Robustness check (medium-term) | Supplementary |
+| **1-Month Snapshot** | 1 month before election vs 1 month after formation | Robustness check (short-term) | Supplementary |
 
 ### Network Types
 
@@ -93,50 +95,44 @@ This fetches voting data via the Open Data Portal API and saves:
 
 ### 3. Run Network Analysis
 
+**PRIMARY ANALYSIS (1-Year Comparison):**
+```bash
+# Raw weights (for descriptive analysis)
+Rscript scripts/pre_election_vs_post_formation_analysis.R
+
+# Z-score normalized (for QAP/ERGM)
+Rscript scripts/pre_election_vs_post_formation_analysis_normalized.R
+```
+
+**Ideology Correlation Analysis:**
+```bash
+# Test correlation between left/right and conservative/progressive dimensions
+Rscript scripts/ideology_correlation_analysis.R
+```
+
+**Supplementary Analyses (Robustness Checks):**
+```bash
+# 3-month comparison
+Rscript scripts/three_month_pre_election_vs_post_formation.R
+Rscript scripts/three_month_pre_election_vs_post_formation_normalized.R
+
+# 1-month snapshot
+Rscript scripts/one_month_pre_election_vs_post_formation.R
+Rscript scripts/one_month_pre_election_vs_post_formation_normalized.R
+```
+
 **Run All Analyses at Once:**
 ```bash
 ./run_all_analyses.sh
 ```
 
-**Or run individual analyses:**
-
-**One-Month Snapshot Analysis:**
+**Additional Validation:**
 ```bash
-# Raw weights
-Rscript scripts/one_month_pre_election_vs_post_formation.R
-
-# Z-score normalized
-Rscript scripts/one_month_pre_election_vs_post_formation_normalized.R
-```
-
-**Three-Month Comparison (Recommended):**
-```bash
-# Raw weights
-Rscript scripts/three_month_pre_election_vs_post_formation.R
-
-# Z-score normalized (recommended for Study 2)
-Rscript scripts/three_month_pre_election_vs_post_formation_normalized.R
-```
-
-**One-Year Comparison:**
-```bash
-# Raw weights
-Rscript scripts/pre_election_vs_post_formation_analysis.R
-
-# Z-score normalized
-Rscript scripts/pre_election_vs_post_formation_analysis_normalized.R
-```
-
-**Additional Analyses:**
-```bash
-# Generate comprehensive statistics
-Rscript scripts/generate_network_statistics.R
-
-# Analyze vote unanimity (validation)
+# Analyze vote unanimity (validates that agreements reflect cooperation)
 Rscript scripts/analyze_vote_unanimity.R
 
-# Add ideology attributes (for Study 1)
-Rscript scripts/add_ideology_attributes.R
+# Generate comprehensive statistics across all periods
+Rscript scripts/generate_network_statistics.R
 ```
 
 ---
@@ -147,27 +143,44 @@ Rscript scripts/add_ideology_attributes.R
 - **`README.md`** - Project overview and quick start guide
 - **`report/SNA4DSprojectTemplate2025.qmd`** ⭐ - Full methodology section (Dataset + Biases)
 
-### Key Visualizations
+### Primary Analysis Outputs (1-Year Comparison)
 
 | File | Content |
 |------|---------|
+| `network_comparison_pre_vs_post_formation.pdf` ⭐ | Side-by-side network visualization (raw weights) |
+| `detailed_pre_vs_post_formation_analysis.pdf` ⭐ | Degree distributions, communities, party types |
+| `network_changes_pre_vs_post_formation.pdf` ⭐ | Network metrics comparison & percent changes |
+| `pre_vs_post_formation_comparison.csv` ⭐ | Network statistics comparison table |
+| `node_attributes_pre_election.csv` ⭐ | Node attributes with Kieskompas coordinates (for QAP) |
+| `node_attributes_post_formation.csv` ⭐ | Node attributes with Kieskompas coordinates (for QAP) |
+| `edges_pre_election.csv` | Edge list (pre-election network) |
+| `edges_post_formation.csv` | Edge list (post-formation network) |
+
+### Ideology Analysis
+
+| File | Content |
+|------|---------|
+| `ideology_correlation_analysis.pdf` | Correlation tests & visualizations |
+| `ideology_correlation_results.csv` | Pearson & Spearman correlation statistics |
+| `ideology_quadrant_classification.csv` | Party classifications by ideology quadrant |
+
+### Supplementary Analyses (Robustness Checks)
+
+| File | Content |
+|------|---------|
+| `network_comparison_three_month_pre_vs_post_formation.pdf` | 3-month comparison (raw) |
+| `network_comparison_three_month_pre_vs_post_formation_normalized.pdf` | 3-month comparison (z-score) |
+| `three_month_pre_vs_post_formation_comparison.csv` | 3-month comparison stats |
 | `network_comparison_one_month_pre_vs_post_formation.pdf` | 1-month snapshot (raw) |
 | `network_comparison_one_month_pre_vs_post_formation_normalized.pdf` | 1-month snapshot (z-score) |
-| `network_comparison_three_month_pre_vs_post_formation.pdf` | 3-month comparison (raw) ⭐ |
-| `network_comparison_three_month_pre_vs_post_formation_normalized.pdf` | 3-month comparison (z-score) ⭐ |
-| `network_comparison_pre_vs_post_formation.pdf` | 1-year comparison (raw) |
-| `network_comparison_normalized_pre_vs_post_formation.pdf` | 1-year comparison (z-score) |
-| `vote_unanimity_summary.pdf` | Vote balance validation |
+| `one_month_pre_vs_post_formation_comparison.csv` | 1-month comparison stats |
 
-### Key Statistics
+### Validation
 
 | File | Content |
 |------|---------|
-| `one_month_pre_vs_post_formation_comparison.csv` | 1-month comparison stats |
-| `three_month_pre_vs_post_formation_comparison.csv` | 3-month comparison stats ⭐ |
-| `pre_vs_post_formation_comparison.csv` | 1-year comparison stats |
-| `normalized_network_comparison_pre_vs_post_formation.csv` | Z-score comparison (1-year) |
-| `vote_unanimity_statistics.csv` | Vote distribution analysis |
+| `vote_unanimity_summary.pdf` | Vote balance validation (confirms cooperation patterns) |
+| `vote_unanimity_statistics.csv` | Vote distribution analysis by period |
 
 ---
 
@@ -185,9 +198,13 @@ Rscript scripts/add_ideology_attributes.R
 - **Source:** Kieskompas 2023
 - **Dimensions:** Left-Right & Conservative-Progressive axes
 - **Scale:** -1 to +1 on each dimension
-- **Coverage:** 19 parties with coordinates
+- **Coverage:** 18 parties with coordinates
 - **File:** `political_axes_data.csv`
-- **Use:** Node attributes for Study 1 (MRQAP analysis)
+- **Use:** Node attributes for Study 1 (QAP analysis) and Study 2 (ERGM)
+- **Correlation:** Strong negative correlation (r = -0.846, p < 0.001)
+  - Left-wing parties tend to be progressive
+  - Right-wing parties tend to be conservative
+  - **Implication:** Potential multicollinearity if both dimensions used as predictors
 
 ---
 
@@ -197,23 +214,28 @@ Rscript scripts/add_ideology_attributes.R
 - **Election Date:** November 22, 2023
 - **Cabinet Formation:** July 5, 2024 (Schoof I)
 
-### One-Month Snapshot
-- **Pre-Election:** October 22, 2023 - November 21, 2023 (1 month before election)
-  - 588 motions, 12,447 votes, 21 parties
-- **Post-Formation:** July 5, 2024 - August 4, 2024 (1 month after formation)
-  - 27 motions, 269 votes, 15 parties
+### Primary Analysis: One-Year Comparison ⭐
+- **Pre-Election Period:** November 22, 2022 - November 21, 2023 (1 year before election)
+  - **Data:** 3,309 motions, 69,544 votes, 25 parties
+  - **Context:** Final year of Rutte IV cabinet before election
+- **Post-Formation Period:** July 5, 2024 - July 4, 2025 (1 year after formation)
+  - **Data:** 5,004 motions, 33,177 votes, 17 parties  
+  - **Context:** First year of Schoof I cabinet
+- **Network Structure:** 
+  - Both networks include same 28 unique parties (for QAP compatibility)
+  - Inactive parties connected with minimal edges (0.001 weight) for ERGM compatibility
 
-### Three-Month Comparison (Recommended)
+### Supplementary Analysis: Three-Month Comparison
 - **Pre-Election:** August 22, 2023 - November 21, 2023 (3 months before election)
   - 1,102 motions, 23,850 votes, 22 parties
 - **Post-Formation:** July 5, 2024 - October 4, 2024 (3 months after formation)
   - 243 motions, 1,599 votes, 15 parties
 
-### One-Year Comparison
-- **Pre-Election:** November 22, 2022 - November 21, 2023 (1 year before election)
-  - 3,309 motions, 69,544 votes, 25 parties
-- **Post-Formation:** July 5, 2024 - July 4, 2025 (1 year after formation)
-  - 5,004 motions, 33,177 votes, 17 parties
+### Supplementary Analysis: One-Month Snapshot
+- **Pre-Election:** October 22, 2023 - November 21, 2023 (1 month before election)
+  - 588 motions, 12,447 votes, 21 parties
+- **Post-Formation:** July 5, 2024 - August 4, 2024 (1 month after formation)
+  - 27 motions, 269 votes, 15 parties
 
 ---
 
@@ -260,35 +282,69 @@ install.packages(c("lubridate", "igraph", "ggplot2"))
 
 ## Key Findings
 
-### Network Changes (3-Month Comparison - Recommended)
-- **Nodes:** 22 → 15 parties (-31.8%)
-- **Edges:** 211 → 105 (-50.2%)
-- **Density:** 0.913 → 1.000 (+9.5%)
-- **Mean Degree:** 19.2 → 14.0 (-27.0%)
-- **Transitivity:** 1.000 → 1.000 (both fully transitive)
-- **Components:** 2 → 1 (network became more integrated)
-- **Agreement Rate:** 54.4% → 61.4% (higher cooperation post-formation)
+### Primary Finding: One-Year Comparison (Pre-Election vs. Post-Formation) ⭐
 
-### Network Changes (1-Month Snapshot)
-- **Nodes:** 21 → 15 parties (-28.6%)
-- **Edges:** 210 → 61 (-70.9%)
-- **Density:** 1.000 → 0.581 (-41.9%)
-- **Mean Degree:** 20.0 → 8.1 (-59.3%)
-- **Components:** 1 → 2 (network became fragmented)
-- **Note:** Limited post-formation data (only 27 motions)
-
-### Network Changes (1-Year Comparison)
-- **Nodes:** 25 → 17 parties (-32.0%)
+**Network Structure Changes:**
+- **Active Nodes:** 25 → 17 parties (-32.0%)
+  - Both networks include same 28 total nodes for QAP/ERGM compatibility
 - **Edges:** 223 → 112 (-49.8%)
 - **Density:** 0.743 → 0.824 (+10.8%)
 - **Mean Degree:** 17.8 → 13.2 (-26.1%)
+- **Transitivity:** High in both periods (clustering coefficient)
 - **Components:** 5 → 3 (network became more integrated)
 
-### Vote Unanimity Validation
+**Interpretation:**
+- **Fewer active parties** but **higher density** → more concentrated cooperation
+- **Network consolidation** post-formation (fewer disconnected components)
+- Despite fewer parties, remaining parties cooperate more intensively
+
+**Kieskompas Ideology Findings:**
+- **Strong correlation** between left/right and conservative/progressive (r = -0.846, p < 0.001)
+- **8 Left-Progressive parties** (BIJ1, Volt, PvdD, GroenLinks-PvdA, D66, DENK, SP, ChristenUnie)
+- **8 Right-Conservative parties** (CDA, VVD, BBB, SGP, PVV, JA21, BVNL, FVD)
+- **2 Left-Conservative parties** (50PLUS, NSC)
+- **0 Right-Progressive parties**
+- **Implication:** Single ideology dimension may be sufficient for QAP (multicollinearity concern)
+
+### Robustness Checks
+
+**Three-Month Comparison:**
+- Nodes: 22 → 15 (-31.8%), Edges: 211 → 105 (-50.2%), Density: 0.913 → 1.000 (+9.5%)
+- Similar pattern to 1-year analysis
+
+**One-Month Snapshot:**
+- Nodes: 21 → 15 (-28.6%), Edges: 210 → 61 (-70.9%), Density: 1.000 → 0.581 (-41.9%)
+- Note: Limited post-formation data (only 27 motions)
+
+### Data Validation
+
+**Vote Unanimity Analysis:**
 - **Mean Agreement Rate:** 55-56% across all periods
 - **Near-Unanimous Votes:** ~20% of motions
 - **Balanced Votes:** ~30% of motions
-- **Conclusion:** Agreement rates reflect genuine cooperation, not unanimous voting
+- **Conclusion:** Agreement rates reflect genuine cooperation patterns, not unanimous voting
+
+---
+
+## Research Design
+
+This project consists of two complementary studies examining party cooperation networks:
+
+### Study 1: QAP Analysis (Network Comparison)
+- **Research Question:** Does party voting behavior change significantly between the pre-election and post-formation periods?
+- **Method:** Quadratic Assignment Procedure (QAP) to test network similarity
+- **Networks:** Both pre-election and post-formation networks (same 28 nodes)
+- **Node Attributes:** Kieskompas ideology data (left/right, conservative/progressive)
+- **Focus:** Whether cooperation patterns are significantly different across time periods
+
+### Study 2: ERGM Analysis (Network Formation)
+- **Research Question:** What factors predict tie formation in party cooperation networks?
+- **Method:** Exponential Random Graph Models (ERGM)
+- **Network Requirements:** 
+  - Connected networks (no isolates) → achieved via minimal edges (0.001 weight)
+  - Rich attribute data for hypothesis testing
+- **Hypotheses:** Testing effects of ideology, government status, party size, etc.
+- **Focus:** Understanding mechanisms behind cooperation network structure
 
 ---
 
