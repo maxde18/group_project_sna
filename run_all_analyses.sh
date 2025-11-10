@@ -23,34 +23,11 @@ Rscript scripts/ideology_correlation_analysis.R
 echo ""
 
 echo ""
-echo "ROBUSTNESS CHECKS"
-echo "==============================================================================="
-echo ""
-
-echo "[4/8] Three-Month Comparison (Raw Weights)..."
-Rscript scripts/three_month_pre_election_vs_post_formation.R
-echo ""
-
-echo "[5/8] Three-Month Comparison (Z-Score Normalized)..."
-Rscript scripts/three_month_pre_election_vs_post_formation_normalized.R
-echo ""
-
-echo "[6/8] One-Month Comparison (Raw Weights)..."
-Rscript scripts/one_month_pre_election_vs_post_formation.R
-echo ""
-
-echo "[7/8] One-Month Comparison (Z-Score Normalized)..."
-Rscript scripts/one_month_pre_election_vs_post_formation_normalized.R
-echo ""
-
-echo ""
 echo "VALIDATION"
 echo "==============================================================================="
 echo ""
 
-echo "[8/8] Vote Unanimity Analysis..."
-Rscript scripts/analyze_vote_unanimity.R
-echo ""
+
 
 echo ""
 echo "==============================================================================="
