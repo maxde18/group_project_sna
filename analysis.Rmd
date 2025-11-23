@@ -30,7 +30,7 @@ knitr::opts_chunk$set(
 print(paste("Working directory set to:", getwd()))
 ```
 
----
+------------------------------------------------------------------------
 
 # 1. Data Preparation
 
@@ -190,7 +190,7 @@ print("===============================")
 print("Normalized edge lists ready for analysis")
 ```
 
----
+------------------------------------------------------------------------
 
 # 2. Data Exploration
 
@@ -756,7 +756,7 @@ if(nrow(coalition_edgelist_filtered) > 0) {
 }
 ```
 
----
+------------------------------------------------------------------------
 
 # 3. Study 1 Preprocessing (QAP)
 
@@ -806,16 +806,13 @@ write.csv(adj_matrix_post, "results/adjacency_matrices/study1_post_formation_adj
 print("Adjacency matrices exported")
 ```
 
----
+------------------------------------------------------------------------
 
 # 4. Study 2 Preprocessing (GERGM)
 
 ## 4.1 Create Networks with Ideology (Same Node Set)
 
-Study 2 uses GERGM (Generalized Exponential Random Graph Model) to model network formation with covariates. For comparability between periods, we use the same set of parties (all parties from ideology data) but keep networks sparse (not fully connected). This allows:
-- Direct comparison of coefficients between periods
-- Proper alignment of edge covariates (co-sponsorship, coalition)
-- Consistent model interpretation
+Study 2 uses GERGM (Generalized Exponential Random Graph Model) to model network formation with covariates. For comparability between periods, we use the same set of parties (all parties from ideology data) but keep networks sparse (not fully connected). This allows: - Direct comparison of coefficients between periods - Proper alignment of edge covariates (co-sponsorship, coalition) - Consistent model interpretation
 
 ```{r study2-networks}
 # Study 2 uses ALL parties from ideology data (same as Study 1)
@@ -941,7 +938,7 @@ print("Co-sponsorship and coalition counts added as edge attributes")
 print("Networks ready for GERGM analysis")
 ```
 
----
+------------------------------------------------------------------------
 
 # 5. QAP Setup
 
@@ -949,32 +946,32 @@ print("Networks ready for GERGM analysis")
 
 QAP (Quadratic Assignment Procedure) will be used in Study 1 to test whether the network structure changed significantly between the pre-election and post-formation periods. QAP compares two networks by:
 
-1. Computing a test statistic (e.g., correlation) between the two adjacency matrices
-2. Permuting rows and columns of one matrix to generate a null distribution
-3. Comparing the observed statistic to the null distribution to assess significance
+1.  Computing a test statistic (e.g., correlation) between the two adjacency matrices
+2.  Permuting rows and columns of one matrix to generate a null distribution
+3.  Comparing the observed statistic to the null distribution to assess significance
 
 ## 5.2 Data Requirements
 
-- **Pre-election adjacency matrix**: `adj_matrix_pre` (21 × 21, fully connected, z-score normalized weights)
-- **Post-formation adjacency matrix**: `adj_matrix_post` (21 × 21, fully connected, z-score normalized weights)
-- Both matrices are symmetric and undirected
+-   **Pre-election adjacency matrix**: `adj_matrix_pre` (21 × 21, fully connected, z-score normalized weights)
+-   **Post-formation adjacency matrix**: `adj_matrix_post` (21 × 21, fully connected, z-score normalized weights)
+-   Both matrices are symmetric and undirected
 
 ## 5.3 Analysis Plan
 
 The QAP analysis will:
 
-1. Compute correlation between pre-election and post-formation adjacency matrices
-2. Perform QAP permutation test to assess significance
-3. Compare network-level metrics (density, mean degree, etc.) between periods
-4. Visualize differences in network structure
+1.  Compute correlation between pre-election and post-formation adjacency matrices
+2.  Perform QAP permutation test to assess significance
+3.  Compare network-level metrics (density, mean degree, etc.) between periods
+4.  Visualize differences in network structure
 
 ## 5.4 Implementation Notes
 
-- Use `sna::qaptest()` or similar function for QAP permutation testing
-- Ensure matrices are properly aligned (same row/column order)
-- Consider multiple test statistics (correlation, Hamming distance, etc.)
+-   Use `sna::qaptest()` or similar function for QAP permutation testing
+-   Ensure matrices are properly aligned (same row/column order)
+-   Consider multiple test statistics (correlation, Hamming distance, etc.)
 
----
+------------------------------------------------------------------------
 
 # 6. GERGM Setup
 
@@ -986,52 +983,202 @@ GERGM (Generalized Exponential Random Graph Model) will be used in Study 2 to mo
 
 The GERGM will test the following hypotheses:
 
-- **H2.1**: Parties with similar ideologies on the left-right spectrum are more likely to agree on motions.
-  - *Term*: `absdiff(LeftVSRight)` - measures how differences in ideology impact tie formation
+-   **H2.1**: Parties with similar ideologies on the left-right spectrum are more likely to agree on motions.
+    -   *Term*: `absdiff(LeftVSRight)` - measures how differences in ideology impact tie formation
+-   **H2.2**: Parties that have often been in a coalition together are more likely to agree on motions.
+    -   *Term*: `edgecov(coalitioncount)` - uses coalition count as edge covariate
+-   **H2.3**: Parties are more likely to agree on motions if they share agreement on motions with a third party.
+    -   *Term*: `gwesp` - captures transitivity/triadic closure
+-   **H2.4**: Some parties are more likely to agree with many other parties.
+    -   *Term*: `kstar(3)` - captures tendency for some parties to form broader cooperation patterns
+-   **H2.5**: Parties who frequently co-sponsor motions tend to agree more with each other.
+    -   *Term*: `edgecov(cosponsor_count)` - uses co-sponsorship count as edge covariate
 
-- **H2.2**: Parties that have often been in a coalition together are more likely to agree on motions.
-  - *Term*: `edgecov(coalitioncount)` - uses coalition count as edge covariate
+## Pre election network 
 
-- **H2.3**: Parties are more likely to agree on motions if they share agreement on motions with a third party.
-  - *Term*: `gwesp` - captures transitivity/triadic closure
+```{r}
 
-- **H2.4**: Some parties are more likely to agree with many other parties.
-  - *Term*: `kstar(3)` - captures tendency for some parties to form broader cooperation patterns
+#### 6.3 Pre-election GERGM specification and estimation ----
+# Assumes:
+# - g_study2_pre already HAS edge attributes: weight, cosponsor_count, coalition_count
+# - node attribute: left_right
+# - edge covariate edgelists already added earlier in the pipeline
+# - libraries GERGM and igraph loaded
 
-- **H2.5**: Parties who frequently co-sponsor motions tend to agree more with each other.
-  - *Term*: `edgecov(cosponsor_count)` - uses co-sponsorship count as edge covariate
 
-## 6.3 Data Requirements
 
-For each period (pre-election and post-formation):
+## 1. Valued adjacency matrix (voting agreement, z-score normalized) ----------
+net_pre <- igraph::as_adjacency_matrix(
+  g_study2_pre,
+  attr   = "weight",   # weight_normalized
+  sparse = FALSE
+)
 
-- **Network**: Voting agreement network with z-score normalized weights
-  - Same node set (all 21 parties from ideology data) for comparability
-  - Sparse network (zeros remain zeros, not fully connected)
-- **Vertex attributes**:
-  - `left_right`: Left-right ideology score (only ideology dimension used)
-- **Edge attributes**:
-  - `weight`: Z-score normalized voting agreement (dependent variable)
-  - `cosponsor_count`: Number of times parties co-sponsored motions (0 if no co-sponsorship)
-  - `coalition_count`: Number of times parties were in coalition together (0 if never in coalition)
+party_names_pre <- igraph::V(g_study2_pre)$name
+rownames(net_pre) <- party_names_pre
+colnames(net_pre) <- party_names_pre
+diag(net_pre)     <- 0
 
-## 6.4 Model Specification
+## 2. Node-level covariates (left–right ideology) -----------------------------
+left_right_pre <- igraph::V(g_study2_pre)$left_right
 
-The GERGM will be specified as:
+node_covariates_pre <- data.frame(
+  left_right = left_right_pre,
+  row.names  = party_names_pre,
+  stringsAsFactors = FALSE
+)
 
+## 3. Edge-level covariates as matrices (co-sponsorship, coalition) ----------
+cosponsor_mat_pre <- igraph::as_adjacency_matrix(
+  g_study2_pre,
+  attr   = "cosponsor_count",
+  sparse = FALSE
+)
+
+coalition_mat_pre <- igraph::as_adjacency_matrix(
+  g_study2_pre,
+  attr   = "coalition_count",
+  sparse = FALSE
+)
+
+rownames(cosponsor_mat_pre) <- party_names_pre
+colnames(cosponsor_mat_pre) <- party_names_pre
+
+rownames(coalition_mat_pre) <- party_names_pre
+colnames(coalition_mat_pre) <- party_names_pre
+
+diag(cosponsor_mat_pre)  <- 0
+diag(coalition_mat_pre)  <- 0
+
+## 4. GERGM formula: pre-election network -------------------------------------
+formula_pre <- net_pre ~
+  edges(method = "endogenous") +
+  twostars(alpha = 0.8) +
+  ttriads(alpha = 0.8) +
+  absdiff("left_right") +
+  netcov("cosponsor_mat_pre") +
+  netcov("coalition_mat_pre")
+
+## 5. Estimate pre-election GERGM ---------------------------------------------
+set.seed(1234)
+
+gergm_pre <- GERGM::gergm(
+  formula                        = formula_pre,
+  covariate_data                 = node_covariates_pre,
+  network_is_directed            = FALSE,
+  include_diagonal               = FALSE,
+  normalization_type             = "division",
+  distribution_estimator         = "none",
+  number_of_networks_to_simulate = 50000,
+  MCMC_burnin                    = 20000,
+  thin                           = 1 / 10,
+  proposal_variance              = 0.2,
+  target_accept_rate             = 0.25,
+  seed                           = 1234,
+  convergence_tolerance          = 0.01,
+  force_x_theta_updates          = 5,
+  sample_edges_at_a_time         = 0
+)
+
+## 6. Output -------------------------------------------------------------------
+summary(gergm_pre)
+
+# Optional diagnostics:
+# GERGM::Estimate_Plot(gergm_pre)
+# GERGM::GOF(gergm_pre)
+# GERGM::Trace_Plot(gergm_pre)
+
+# Optional save:
+# saveRDS(gergm_pre, file = "results/models/gergm_pre_election.rds")
 ```
-Network ~ absdiff(LeftVSRight) + edgecov(coalitioncount) + gwesp + kstar(3) + edgecov(cosponsor_count)
+
+## Post election network
+
+```{r}
+
+net_post <- igraph::as_adjacency_matrix(
+  g_study2_post,
+  attr   = "weight",   # weight_normalized
+  sparse = FALSE
+)
+
+party_names_post <- igraph::V(g_study2_post)$name
+rownames(net_post) <- party_names_post
+colnames(net_post) <- party_names_post
+diag(net_post)     <- 0
+
+## 2. Node-level covariates (left–right ideology) -----------------------------
+left_right_post <- igraph::V(g_study2_post)$left_right
+
+node_covariates_post <- data.frame(
+  left_right = left_right_post,
+  row.names  = party_names_post,
+  stringsAsFactors = FALSE
+)
+
+## 3. Edge-level covariates as matrices (co-sponsorship, coalition) ----------
+cosponsor_mat_post <- igraph::as_adjacency_matrix(
+  g_study2_post,
+  attr   = "cosponsor_count",
+  sparse = FALSE
+)
+
+coalition_mat_post <- igraph::as_adjacency_matrix(
+  g_study2_post,
+  attr   = "coalition_count",
+  sparse = FALSE
+)
+
+rownames(cosponsor_mat_post) <- party_names_post
+colnames(cosponsor_mat_post) <- party_names_post
+
+rownames(coalition_mat_post) <- party_names_post
+colnames(coalition_mat_post) <- party_names_post
+
+diag(cosponsor_mat_post)  <- 0
+diag(coalition_mat_post)  <- 0
+
+## 4. GERGM formula: post-formation network -----------------------------------
+formula_post <- net_post ~
+  edges(method = "endogenous") +
+  twostars(alpha = 0.8) +
+  ttriads(alpha = 0.8) +
+  absdiff("left_right") +
+  netcov("cosponsor_mat_post") +
+  netcov("coalition_mat_post")
+
+## 5. Estimate post-formation GERGM -------------------------------------------
+set.seed(1234)
+
+gergm_post <- GERGM::gergm(
+  formula                        = formula_post,
+  covariate_data                 = node_covariates_post,
+  network_is_directed            = FALSE,
+  include_diagonal               = FALSE,
+  normalization_type             = "division",
+  distribution_estimator         = "none",
+  number_of_networks_to_simulate = 50000,
+  MCMC_burnin                    = 20000,
+  thin                           = 1 / 10,
+  proposal_variance              = 0.2,
+  target_accept_rate             = 0.25,
+  seed                           = 1234,
+  convergence_tolerance          = 0.01,
+  force_x_theta_updates          = 5,
+  sample_edges_at_a_time         = 0
+)
+
+## 6. Output -------------------------------------------------------------------
+summary(gergm_post)
+
+# Optional diagnostics:
+# GERGM::Estimate_Plot(gergm_post)
+# GERGM::GOF(gergm_post)
+# GERGM::Trace_Plot(gergm_post)
+
+# Optional save:
+# saveRDS(gergm_post, file = "results/models/gergm_post_formation.rds")
 ```
-
-## 6.5 Implementation Notes
-
-- Use `GERGM` package or similar for model estimation
-- Fit separate models for pre-election and post-formation periods
-- Compare coefficient estimates between periods
-- Assess model fit and diagnostics
-- Export edge lists with all attributes for GERGM input
-
----
 
 # 7. Summary
 
@@ -1071,13 +1218,13 @@ print("  • Ideology, co-sponsorship, and coalition attributes added")
 
 All preprocessing outputs have been saved to:
 
-- **Adjacency Matrices:** `results/adjacency_matrices/`
-  - `study1_pre_election_adjacency.csv`
-  - `study1_post_formation_adjacency.csv`
-- **Statistics:** `results/statistics/`
-- **Visualizations:** `results/visualizations/`
+-   **Adjacency Matrices:** `results/adjacency_matrices/`
+    -   `study1_pre_election_adjacency.csv`
+    -   `study1_post_formation_adjacency.csv`
+-   **Statistics:** `results/statistics/`
+-   **Visualizations:** `results/visualizations/`
 
----
+------------------------------------------------------------------------
 
 # Session Info
 
