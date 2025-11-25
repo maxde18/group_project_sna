@@ -190,6 +190,60 @@ print("===============================")
 print("Normalized edge lists ready for analysis")
 ```
 
+## 1.5 Create Fully Connected Networks
+
+Both Study 1 (QAP) and Study 2 (GERGM) require fully connected networks. We create these networks with all parties from the ideology data, setting zero edge weights to 1e-6 for full connectivity.
+
+```{r fully-connected-networks}
+# Use all parties from ideology data for both studies
+all_parties <- sort(ideology_data$party)
+
+# Create networks with normalized weights
+g_pre_norm <- create_graph(edgelist_pre_norm, all_parties, use_normalized = TRUE)
+g_post_norm <- create_graph(edgelist_post_norm, all_parties, use_normalized = TRUE)
+
+# Generate adjacency matrices
+adj_matrix_pre <- igraph::as_adjacency_matrix(g_pre_norm, attr = "weight", sparse = FALSE)
+adj_matrix_post <- igraph::as_adjacency_matrix(g_post_norm, attr = "weight", sparse = FALSE)
+
+# Set 0 values to 1e-6 to make fully connected (but keep diagonal as 0)
+adj_matrix_pre[adj_matrix_pre == 0] <- 1e-6
+adj_matrix_post[adj_matrix_post == 0] <- 1e-6
+diag(adj_matrix_pre) <- 0
+diag(adj_matrix_post) <- 0
+
+# Regenerate fully connected networks
+g_pre_connected <- igraph::graph_from_adjacency_matrix(adj_matrix_pre, 
+                                                       mode = "undirected", 
+                                                       weighted = TRUE)
+g_post_connected <- igraph::graph_from_adjacency_matrix(adj_matrix_post, 
+                                                        mode = "undirected", 
+                                                        weighted = TRUE)
+
+# Set vertex names
+igraph::V(g_pre_connected)$name <- all_parties
+igraph::V(g_post_connected)$name <- all_parties
+
+print("FULLY CONNECTED NETWORKS CREATED")
+print("=================================")
+print(sprintf("Pre-election: %d nodes, fully connected (%d edges)", 
+              snafun::count_vertices(g_pre_connected), snafun::count_edges(g_pre_connected)))
+print(sprintf("Post-formation: %d nodes, fully connected (%d edges)", 
+              snafun::count_vertices(g_post_connected), snafun::count_edges(g_post_connected)))
+print("All zero edge weights set to 1e-6 for full connectivity")
+print("Networks ready for both Study 1 (QAP) and Study 2 (GERGM)")
+
+# Export adjacency matrices
+if(!dir.exists("results/adjacency_matrices")) {
+  dir.create("results/adjacency_matrices", recursive = TRUE)
+}
+write.csv(adj_matrix_pre, "results/adjacency_matrices/pre_election_adjacency.csv", 
+          row.names = TRUE)
+write.csv(adj_matrix_post, "results/adjacency_matrices/post_formation_adjacency.csv", 
+          row.names = TRUE)
+print("Adjacency matrices exported")
+```
+
 ------------------------------------------------------------------------
 
 # 2. Data Exploration
@@ -760,95 +814,55 @@ if(nrow(coalition_edgelist_filtered) > 0) {
 
 # 3. Study 1 Preprocessing (QAP)
 
-## 3.1 Create Fully Connected Networks
+## 3.1 Use Fully Connected Networks
 
-Study 1 compares network structures between pre-election and post-formation periods using QAP (Quadratic Assignment Procedure). This requires fully connected networks with all parties.
+Study 1 compares network structures between pre-election and post-formation periods using QAP (Quadratic Assignment Procedure). We use the fully connected networks created in general preprocessing.
 
 ```{r study1-networks}
-# Study 1 uses ALL parties from ideology data
-all_parties_study1 <- sort(ideology_data$party)
+# Study 1 uses the fully connected networks from general preprocessing
+g_study1_pre_connected <- g_pre_connected
+g_study1_post_connected <- g_post_connected
 
-# Create networks with normalized weights (for QAP comparison)
-g_study1_pre <- create_graph(edgelist_pre_norm, all_parties_study1, use_normalized = TRUE)
-g_study1_post <- create_graph(edgelist_post_norm, all_parties_study1, use_normalized = TRUE)
-
-# Generate adjacency matrices
-adj_matrix_pre <- igraph::as_adjacency_matrix(g_study1_pre, attr = "weight", sparse = FALSE)
-adj_matrix_post <- igraph::as_adjacency_matrix(g_study1_post, attr = "weight", sparse = FALSE)
-
-# Set 0 values to 1e-6 to make fully connected (but keep diagonal as 0)
-adj_matrix_pre[adj_matrix_pre == 0] <- 1e-6
-adj_matrix_post[adj_matrix_post == 0] <- 1e-6
-diag(adj_matrix_pre) <- 0
-diag(adj_matrix_post) <- 0
-
-# Regenerate networks using new adjacency matrix
-g_study1_pre_connected <- igraph::graph_from_adjacency_matrix(adj_matrix_pre, 
-                                                                mode = "undirected", 
-                                                                weighted = TRUE)
-g_study1_post_connected <- igraph::graph_from_adjacency_matrix(adj_matrix_post, 
-                                                                 mode = "undirected", 
-                                                                 weighted = TRUE)
-
-print("STUDY 1: FULLY CONNECTED NETWORKS")
-print("==================================")
+print("STUDY 1: USING FULLY CONNECTED NETWORKS")
+print("========================================")
 print(sprintf("Pre-election: %d nodes, fully connected", 
               snafun::count_vertices(g_study1_pre_connected)))
 print(sprintf("Post-formation: %d nodes, fully connected", 
               snafun::count_vertices(g_study1_post_connected)))
-print("All zero values set to 1e-6 for full connectivity")
-
-# Export adjacency matrices
-write.csv(adj_matrix_pre, "results/adjacency_matrices/study1_pre_election_adjacency.csv", 
-          row.names = TRUE)
-write.csv(adj_matrix_post, "results/adjacency_matrices/study1_post_formation_adjacency.csv", 
-          row.names = TRUE)
-print("Adjacency matrices exported")
+print("Networks ready for QAP analysis")
 ```
 
 ------------------------------------------------------------------------
 
 # 4. Study 2 Preprocessing (GERGM)
 
-## 4.1 Create Networks with Ideology (Same Node Set)
+## 4.1 Add Ideology Attributes to Fully Connected Networks
 
-Study 2 uses GERGM (Generalized Exponential Random Graph Model) to model network formation with covariates. For comparability between periods, we use the same set of parties (all parties from ideology data) but keep networks sparse (not fully connected). This allows: - Direct comparison of coefficients between periods - Proper alignment of edge covariates (co-sponsorship, coalition) - Consistent model interpretation
+Study 2 uses GERGM (Generalized Exponential Random Graph Model) to model network formation with covariates. We start with the fully connected networks from general preprocessing and add ideology attributes to vertices.
 
 ```{r study2-networks}
-# Study 2 uses ALL parties from ideology data (same as Study 1)
-# But networks remain sparse (zeros stay zeros, not set to 1e-6)
-all_parties_study2 <- sort(ideology_data$party)
-
-# Create networks with normalized weights and ideology attributes
-create_graph_with_ideology <- function(edgelist_norm, vertices, ideology_data) {
-  g <- create_graph(edgelist_norm, vertices, use_normalized = TRUE)
-  
-  # Add ideology attributes (only left_right for Study 2)
+# Study 2 uses the fully connected networks from general preprocessing
+# Add ideology attributes to vertices
+add_ideology_attributes <- function(g, ideology_data) {
   party_names <- igraph::V(g)$name
   left_right_vals <- sapply(party_names, function(p) {
     idx <- which(ideology_data$party == p)
     if(length(idx) > 0) ideology_data$left_right[idx[1]] else NA
   })
   igraph::V(g)$left_right <- left_right_vals
-  
   return(g)
 }
 
-g_study2_pre <- create_graph_with_ideology(edgelist_pre_norm, 
-                                            all_parties_study2, 
-                                            ideology_data)
-g_study2_post <- create_graph_with_ideology(edgelist_post_norm, 
-                                             all_parties_study2, 
-                                             ideology_data)
+g_study2_pre <- add_ideology_attributes(g_pre_connected, ideology_data)
+g_study2_post <- add_ideology_attributes(g_post_connected, ideology_data)
 
-print("STUDY 2: NETWORKS WITH IDEOLOGY (SAME NODE SET)")
-print("=================================================")
-print(sprintf("Pre-election: %d nodes (all parties), %d edges (sparse)", 
+print("STUDY 2: IDEOLOGY ATTRIBUTES ADDED")
+print("===================================")
+print(sprintf("Pre-election: %d nodes, fully connected (%d edges)", 
               snafun::count_vertices(g_study2_pre), snafun::count_edges(g_study2_pre)))
-print(sprintf("Post-formation: %d nodes (all parties), %d edges (sparse)", 
+print(sprintf("Post-formation: %d nodes, fully connected (%d edges)", 
               snafun::count_vertices(g_study2_post), snafun::count_edges(g_study2_post)))
-print("Ideology attributes added to vertices")
-print("Note: Networks are sparse (not fully connected) for GERGM analysis")
+print("Left-right ideology attributes added to vertices")
 ```
 
 ## 4.2 Add Co-Sponsorship and Coalition Edge Attributes
@@ -935,41 +949,186 @@ g_study2_post <- add_edge_attribute(g_study2_post, coalition_edgelist_post_filte
 print("STUDY 2: EDGE ATTRIBUTES ADDED")
 print("===============================")
 print("Co-sponsorship and coalition counts added as edge attributes")
+print("Networks are already fully connected from general preprocessing")
 print("Networks ready for GERGM analysis")
 ```
 
 ------------------------------------------------------------------------
 
-# 5. QAP Setup
+# 5. QAP Analysis (Study 1)
 
 ## 5.1 Overview
 
-QAP (Quadratic Assignment Procedure) will be used in Study 1 to test whether the network structure changed significantly between the pre-election and post-formation periods. QAP compares two networks by:
+QAP (Quadratic Assignment Procedure) is used in Study 1 to test whether the network structure changed significantly between the pre-election and post-formation periods. QAP compares two networks by:
 
-1.  Computing a test statistic (e.g., correlation) between the two adjacency matrices
-2.  Permuting rows and columns of one matrix to generate a null distribution
-3.  Comparing the observed statistic to the null distribution to assess significance
+1. Computing a test statistic (e.g., correlation) between the two adjacency matrices
+2. Permuting rows and columns of one matrix to generate a null distribution
+3. Comparing the observed statistic to the null distribution to assess significance
 
-## 5.2 Data Requirements
+## 5.2 Prepare Data for QAP
 
--   **Pre-election adjacency matrix**: `adj_matrix_pre` (21 × 21, fully connected, z-score normalized weights)
--   **Post-formation adjacency matrix**: `adj_matrix_post` (21 × 21, fully connected, z-score normalized weights)
--   Both matrices are symmetric and undirected
+```{r qap-prepare}
+# Load required packages
+if(!require(sna)) install.packages("sna")
+library(sna)
 
-## 5.3 Analysis Plan
+# Create results directory if it doesn't exist
+if(!dir.exists("results/statistics")) {
+  dir.create("results/statistics", recursive = TRUE)
+}
 
-The QAP analysis will:
+# Ensure matrices are properly aligned (same row/column order)
+# Both matrices should already have the same party order from Study 1 preprocessing
+party_order <- rownames(adj_matrix_pre)
 
-1.  Compute correlation between pre-election and post-formation adjacency matrices
-2.  Perform QAP permutation test to assess significance
-3.  Compare network-level metrics (density, mean degree, etc.) between periods
-4.  Visualize differences in network structure
+# Verify alignment
+if(!all(rownames(adj_matrix_pre) == rownames(adj_matrix_post)) ||
+   !all(colnames(adj_matrix_pre) == colnames(adj_matrix_post))) {
+  stop("Adjacency matrices are not aligned!")
+}
 
-## 5.4 Implementation Notes
+print("QAP DATA PREPARATION")
+print("====================")
+print(sprintf("Pre-election matrix: %d x %d", nrow(adj_matrix_pre), ncol(adj_matrix_pre)))
+print(sprintf("Post-formation matrix: %d x %d", nrow(adj_matrix_post), ncol(adj_matrix_post)))
+print(sprintf("Number of parties: %d", length(party_order)))
+print("Matrices are aligned and ready for QAP analysis")
+```
 
--   Use `sna::qaptest()` or similar function for QAP permutation testing
--   Ensure matrices are properly aligned (same row/column order)
--   Consider multiple test statistics (correlation, Hamming distance, etc.)
+## 5.3 Network-Level Metrics Comparison
+
+```{r qap-metrics}
+# Calculate network-level metrics for comparison
+# Using snafun for basic metrics and base R/igraph for others
+
+# Pre-election metrics
+g_pre <- g_study1_pre_connected
+g_post <- g_study1_post_connected
+
+metrics_pre <- list(
+  vertices = snafun::count_vertices(g_pre),
+  edges = snafun::count_edges(g_pre),
+  density = snafun::g_density(g_pre),
+  mean_degree = mean(igraph::degree(g_pre)),
+  mean_weight = mean(igraph::E(g_pre)$weight),
+  max_weight = max(igraph::E(g_pre)$weight),
+  min_weight = min(igraph::E(g_pre)$weight)
+)
+
+metrics_post <- list(
+  vertices = snafun::count_vertices(g_post),
+  edges = snafun::count_edges(g_post),
+  density = snafun::g_density(g_post),
+  mean_degree = mean(igraph::degree(g_post)),
+  mean_weight = mean(igraph::E(g_post)$weight),
+  max_weight = max(igraph::E(g_post)$weight),
+  min_weight = min(igraph::E(g_post)$weight)
+)
+
+# Create comparison table
+metrics_comparison <- data.frame(
+  Metric = c("Vertices", "Edges", "Density", "Mean Degree", 
+             "Mean Weight", "Max Weight", "Min Weight"),
+  Pre_Election = c(
+    metrics_pre$vertices,
+    metrics_pre$edges,
+    sprintf("%.4f", metrics_pre$density),
+    sprintf("%.2f", metrics_pre$mean_degree),
+    sprintf("%.4f", metrics_pre$mean_weight),
+    sprintf("%.4f", metrics_pre$max_weight),
+    sprintf("%.4f", metrics_pre$min_weight)
+  ),
+  Post_Formation = c(
+    metrics_post$vertices,
+    metrics_post$edges,
+    sprintf("%.4f", metrics_post$density),
+    sprintf("%.2f", metrics_post$mean_degree),
+    sprintf("%.4f", metrics_post$mean_weight),
+    sprintf("%.4f", metrics_post$max_weight),
+    sprintf("%.4f", metrics_post$min_weight)
+  ),
+  stringsAsFactors = FALSE
+)
+
+print("NETWORK-LEVEL METRICS COMPARISON")
+print("=================================")
+print(metrics_comparison)
+```
+
+## 5.4 QAP Correlation Test
+
+```{r qap-correlation}
+# Perform QAP correlation test using matrices directly
+# This tests whether the correlation between the two networks is significant
+# H1.1: Dutch political parties show different levels of voting agreement 
+#       before elections compared to after cabinet formation
+# Note: Warnings about "standard deviation is zero" during permutations are 
+#       typically harmless and occur when some permuted rows/columns are constant
+set.seed(12345)
+
+# Compute observed correlation
+observed_corr <- sna::gcor(adj_matrix_pre, adj_matrix_post)
+print(sprintf("Observed correlation: %.4f", observed_corr))
+
+# Perform QAP test using matrices directly (sna::gcor works with matrices)
+suppressWarnings({
+  qap_result <- sna::qaptest(
+    list(adj_matrix_pre, adj_matrix_post),
+    FUN = sna::gcor,
+    reps = 1000,
+    g1 = 1,
+    g2 = 2
+  )
+})
+
+print("QAP CORRELATION TEST")
+print("====================")
+print(sprintf("Observed correlation: %.4f", qap_result$testval))
+print(sprintf("Number of permutations: %d", qap_result$reps))
+print("")
+print("QAP Test Summary:")
+print(summary(qap_result))
+```
+
+## 5.5 QAP Results Interpretation
+
+```{r qap-interpretation}
+# Extract p-value and interpret results
+p_value <- mean(qap_result$dist >= qap_result$testval)
+
+print("QAP RESULTS INTERPRETATION")
+print("===========================")
+print(sprintf("Observed correlation: %.4f", qap_result$testval))
+print(sprintf("P-value (one-tailed): %.4f", p_value))
+print(sprintf("P-value (two-tailed): %.4f", 2 * min(p_value, 1 - p_value)))
+print("")
+if(p_value < 0.05) {
+  print("Interpretation: The correlation between pre-election and post-formation")
+  print("networks is statistically significant (p < 0.05).")
+  print("The network structures are significantly similar.")
+} else {
+  print("Interpretation: The correlation between pre-election and post-formation")
+  print("networks is NOT statistically significant (p >= 0.05).")
+  print("The network structures differ significantly between periods.")
+}
+
+# Save QAP results
+qap_summary <- list(
+  observed_correlation = qap_result$testval,
+  p_value_one_tailed = p_value,
+  p_value_two_tailed = 2 * min(p_value, 1 - p_value),
+  n_permutations = qap_result$reps,
+  interpretation = ifelse(p_value < 0.05, 
+                         "Networks are significantly similar",
+                         "Networks differ significantly")
+)
+
+# Export results
+save(qap_result, qap_summary, metrics_comparison,
+     file = "results/statistics/qap_results.RData")
+print("")
+print("QAP results saved to results/statistics/qap_results.RData")
+```
 
 ------------------------------------------------------------------------
 
@@ -1198,20 +1357,26 @@ print(sprintf("  • Post-formation: %s votes, %s motions, %d parties",
               format(length(unique(motion_data_post$Besluit_Id)), big.mark = ","),
               length(unique(motion_data_post$ActorFractie))))
 print("")
-print("STUDY 1 (QAP):")
-print(sprintf("  • Pre-election network: %d nodes (fully connected)", 
-              snafun::count_vertices(g_study1_pre_connected)))
-print(sprintf("  • Post-formation network: %d nodes (fully connected)", 
-              snafun::count_vertices(g_study1_post_connected)))
+print("FULLY CONNECTED NETWORKS (GENERAL PREPROCESSING):")
+print(sprintf("  • Pre-election: %d nodes, fully connected (%d edges)", 
+              snafun::count_vertices(g_pre_connected), snafun::count_edges(g_pre_connected)))
+print(sprintf("  • Post-formation: %d nodes, fully connected (%d edges)", 
+              snafun::count_vertices(g_post_connected), snafun::count_edges(g_post_connected)))
+print("  • All zero edge weights set to 1e-6 for full connectivity")
 print("  • Adjacency matrices exported")
 print("")
+print("STUDY 1 (QAP):")
+print("  • Uses fully connected networks from general preprocessing")
+print("  • Ready for QAP correlation test")
+print("")
 print("STUDY 2 (GERGM):")
-print(sprintf("  • Pre-election: %d nodes (all parties), %d edges (sparse)", 
+print(sprintf("  • Pre-election: %d nodes, fully connected (%d edges)", 
               snafun::count_vertices(g_study2_pre), snafun::count_edges(g_study2_pre)))
-print(sprintf("  • Post-formation: %d nodes (all parties), %d edges (sparse)", 
+print(sprintf("  • Post-formation: %d nodes, fully connected (%d edges)", 
               snafun::count_vertices(g_study2_post), snafun::count_edges(g_study2_post)))
 print("  • Same node set for comparability between periods")
 print("  • Ideology, co-sponsorship, and coalition attributes added")
+print("  • Ready for GERGM analysis")
 ```
 
 ## 7.2 Files Generated
@@ -1219,8 +1384,8 @@ print("  • Ideology, co-sponsorship, and coalition attributes added")
 All preprocessing outputs have been saved to:
 
 -   **Adjacency Matrices:** `results/adjacency_matrices/`
-    -   `study1_pre_election_adjacency.csv`
-    -   `study1_post_formation_adjacency.csv`
+    -   `pre_election_adjacency.csv`
+    -   `post_formation_adjacency.csv`
 -   **Statistics:** `results/statistics/`
 -   **Visualizations:** `results/visualizations/`
 
